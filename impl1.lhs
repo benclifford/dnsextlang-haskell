@@ -18,6 +18,7 @@ In this code, QUESTION is a question/bug for the spec and BUG is a
 bug that I know exists in the way my code implements the spec.
 
 > import Data.Char
+> import Data.Either
 > import Numeric
 > import Text.Parsec
 > import Text.Parsec.String
@@ -43,8 +44,8 @@ record, or skip (so that I can try all parsers on an example line)
 >   putStrLn "describe results:"
 >   print $ map describeRRParser rrparsers
 >   putStrLn "test against example MX"
->   testmx rrparsers
->   print "the end."
+>   processMaster rrparsers
+>   putStrLn "The end."
 
 ==== the following section deals with parsing the rrtypes file into lines.
 
@@ -165,15 +166,14 @@ BUG: I2 needs to take some parameters. but the MX example doesn't
 Given an RR type and a string that is (eg) read from master zone file,
 output a replacement line for the master zone file in RFC3597 format
 
-> convertToRFC3597 :: RRType -> String -> String
 > convertToRFC3597 rrtype record = let
 >       showOctet o = if o >= 16 then showHex o " " else "0" ++ showHex o " "
 >       result = octetsForRFC3597 rrtype record
 >    in case result of
 >      Right octets ->
->       "TYPE" ++ (show $ rrnumber rrtype) ++ " \\# " ++
->       (show $ length octets) ++ " " ++ (foldr1 (++) (map showOctet octets))
->      Left l -> show l
+>       Right ("TYPE" ++ (show $ rrnumber rrtype) ++ " \\# " ++
+>       (show $ length octets) ++ " " ++ (foldr1 (++) (map showOctet octets)))
+>      Left l -> Left l
 
 BUG/QUESTION: Do I need to write out octets
 
@@ -215,12 +215,23 @@ missing/non-missing final dot dealt with? Do I need to know the origin of
 the zone to do this properly?
 
 
-This test will try an example MX line against every read parser
 
-> testmx p = do
->  let f parser = convertToRFC3597 parser "MX 10 test1.dnsextlang.cqx.ltd.uk."
->  let strs = map f p
->  mapM_ putStrLn strs
+==== Now we can process the example master file
+
+> processMaster p = do
+>  putStrLn "Processing zone.master"
+>  mastercontent <- readFile "zone.master"
+>  let ls = lines mastercontent
+>  mapM_ (processMasterLine p) ls
+
+> processMasterLine parsers l = do
+>  putStrLn $ "; " ++ l
+>  let f parser = convertToRFC3597 parser l
+>  let strs = map f parsers
+>  let rs = rights strs
+>  if length rs > 0 then
+>    mapM_ putStrLn rs
+>   else putStrLn "; no parse for this type"
 
 
 ==== some helper functions:
