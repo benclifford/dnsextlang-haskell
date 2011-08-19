@@ -2,3 +2,4 @@ MX 10 test1.dnsextlang.cqx.ltd.uk.
 CNAME target.dnsextlang.cqx.ltd.uk.
 TESTI1 12
 TESTI4 65538
+A 127.0.0.1

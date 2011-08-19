@@ -124,6 +124,7 @@ BUG the above assumes rrparser will never fail
 >     "I2" -> parseTokenI2
 >     "I4" -> parseTokenI4
 >     "N" -> parseTokenN
+>     "A" -> parseTokenA
 >     _ -> fail $ "UNIMPLEMENTED TOKEN " ++ tokenName
 
 
@@ -148,6 +149,11 @@ BUG: these I<n> need to take some parameters. but the MX example doesn't
 >   many (noneOf " ")
 >   return N
 
+> parseTokenA = do
+>   -- no parameters allowed
+>   return A
+
+
    return $ tokenName ++ " with parameters " ++ (show rest)
    rest <- many (noneOf " ")
 
@@ -160,7 +166,7 @@ BUG: these I<n> need to take some parameters. but the MX example doesn't
 >   rrtokens :: [RRToken]
 >   } deriving Show
 
-> data RRToken = I1 | I2 | I4 | N deriving Show
+> data RRToken = A | I1 | I2 | I4 | N deriving Show
 
 
 
@@ -215,6 +221,18 @@ those to create an octet stream.
 BUG: probably don't encode labels properly - for example, how is the
 missing/non-missing final dot dealt with? Do I need to know the origin of
 the zone to do this properly?
+
+> parserForToken A = do
+>   a <- many1 alphaNum
+>   oneOf "."
+>   b <- many1 alphaNum
+>   oneOf "."
+>   c <- many1 alphaNum
+>   oneOf "."
+>   d <- many1 alphaNum
+>   return ([read a, read b, read c, read d] :: [Int])
+
+BUG: are there other ways to write IP addresses?
 
 
 > parserForI_n octs = do
