@@ -120,18 +120,27 @@ BUG the above assumes rrparser will never fail
 > parseRRtoken = do
 >   tokenName <- many1 alphaNum
 >   case tokenName of
+>     "I1" -> parseTokenI1
 >     "I2" -> parseTokenI2
+>     "I4" -> parseTokenI4
 >     "N" -> parseTokenN
 >     _ -> fail $ "UNIMPLEMENTED TOKEN " ++ tokenName
 
 
-BUG: I2 needs to take some parameters. but the MX example doesn't
-     use them.
+BUG: these I<n> need to take some parameters. but the MX example doesn't
+     use them so I haven't implemented them yet
+
+> parseTokenI1 = do
+>   -- take paramers here BUG
+>   return I1
 
 > parseTokenI2 = do
 >   -- take paramers here BUG
 >   return I2
 
+> parseTokenI4 = do
+>   -- take paramers here BUG
+>   return I4
 
 > parseTokenN = do
 >   -- take paramers here BUG
@@ -151,7 +160,7 @@ BUG: I2 needs to take some parameters. but the MX example doesn't
 >   rrtokens :: [RRToken]
 >   } deriving Show
 
-> data RRToken = I2 | N deriving Show
+> data RRToken = I1 | I2 | I4 | N deriving Show
 
 
 
@@ -191,16 +200,9 @@ those to create an octet stream.
 >   s <- mapM (parserForToken) (rrtokens rrtype)
 >   return (foldr1 (++) s)
 
-> parserForToken I2 = do
->   n <- many1 digit
->   spaces
->   let unpadded = toBase 256 ( read n :: Int)
->   let padding = take ((2 - length unpadded) `max` 0) (repeat 0)
->   return $ padding ++ unpadded
-
-BUG: this doesn't pad to the right number of octets, nor check that the
-     number fits
-BUG: is this the right byte order?
+> parserForToken I1 = parserForI_n 1
+> parserForToken I2 = parserForI_n 2
+> parserForToken I4 = parserForI_n 4
 
 > parserForToken N = do
 >   labels <- (many1 alphaNum) `sepEndBy` (oneOf ".")
@@ -214,6 +216,13 @@ BUG: probably don't encode labels properly - for example, how is the
 missing/non-missing final dot dealt with? Do I need to know the origin of
 the zone to do this properly?
 
+
+> parserForI_n octs = do
+>   n <- many1 digit
+>   spaces
+>   let unpadded = toBase 256 ( read n :: Int)
+>   let padding = take ((octs - length unpadded) `max` 0) (repeat 0)
+>   return $ padding ++ unpadded
 
 
 ==== Now we can process the example master file
