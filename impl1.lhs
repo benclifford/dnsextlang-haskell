@@ -18,6 +18,7 @@ In this code, QUESTION is a question/bug for the spec and BUG is a
 bug that I know exists in the way my code implements the spec.
 
 > import Data.Char
+> import Numeric
 > import Text.Parsec
 > import Text.Parsec.String
 
@@ -165,20 +166,23 @@ Given an RR type and a string that is (eg) read from master zone file,
 output a replacement line for the master zone file in RFC3597 format
 
 > convertToRFC3597 :: RRType -> String -> String
-> convertToRFC3597 rrtype record =
->    "TYPE" ++ (show $ rrnumber rrtype) ++ " \\# " ++
->    (show $ length octets) ++ " " ++ (show octets)
->    where 
->       octets = octetsForRFC3597 rrtype record
+> convertToRFC3597 rrtype record = let
+>       showOctet o = if o >= 16 then showHex o " " else "0" ++ showHex o " "
+>       result = octetsForRFC3597 rrtype record
+>    in case result of
+>      Right octets ->
+>       "TYPE" ++ (show $ rrnumber rrtype) ++ " \\# " ++
+>       (show $ length octets) ++ " " ++ (foldr1 (++) (map showOctet octets))
+>      Left l -> show l
+
+BUG/QUESTION: Do I need to write out octets
 
 Now we need to convert our RR parsers into parsec parsers, and use
 those to create an octet stream.
 
-> octetsForRFC3597 rrtype string =  let 
+> octetsForRFC3597 rrtype string =  let
 >    parser = parserForRFC3597 rrtype
->    results = parse parser "master file syntax line" string
->    (Right r) = results -- BUG: assumes success
->   in r
+>  in parse parser "master file syntax line" string
 
 > parserForRFC3597 :: RRType -> Parser [Int]
 > parserForRFC3597 rrtype = do
@@ -197,20 +201,24 @@ BUG: this doesn't pad to the right number of octets, nor check that the
 BUG: is this the right byte order?
 
 > parserForToken N = do
->   labels <- (many1 alphaNum) `sepBy` (oneOf ".")
+>   labels <- (many1 alphaNum) `sepEndBy` (oneOf ".")
 >   -- o is [String]
 >   let labelToOcts s = [length s] ++ (map ord s) :: [Int]
 >   let labelocts = (map labelToOcts labels) ++ [[0]] :: [[Int]]
 >   spaces
 >   return $ foldr1 (++) labelocts
 
+BUG: probably don't encode labels properly - for example, how is the
+missing/non-missing final dot dealt with? Do I need to know the origin of
+the zone to do this properly?
+
 
 This test will try an example MX line against every read parser
 
 > testmx p = do
 >  let f parser = convertToRFC3597 parser "MX 10 test1.dnsextlang.cqx.ltd.uk."
->  print $ map f p
-
+>  let strs = map f p
+>  mapM_ putStrLn strs
 
 
 ==== some helper functions:
