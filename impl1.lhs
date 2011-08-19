@@ -194,7 +194,9 @@ those to create an octet stream.
 > parserForToken I2 = do
 >   n <- many1 digit
 >   spaces
->   return $ toBase 256 (read n :: Int)
+>   let unpadded = toBase 256 ( read n :: Int)
+>   let padding = take ((2 - length unpadded) `max` 0) (repeat 0)
+>   return $ padding ++ unpadded
 
 BUG: this doesn't pad to the right number of octets, nor check that the
      number fits
@@ -229,5 +231,5 @@ base conversion:
 >   lsd = n `rem` base
 >   rest = n `quot` base
 >  in if rest == 0 then [lsd]
->      else  [lsd] ++ (toBase base rest)
+>      else  (toBase base rest) ++ [lsd]
 
