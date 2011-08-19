@@ -98,8 +98,8 @@ QUESTION: How are tokens separated? by 'many spaces' or a single space?
 >    p = parse rrparser "rrtypes file" s
 >   in case p of
 >     Right r -> r
+>     Left err -> error ("Invalid RRType definition: " ++ (show err))
 
-BUG the above assumes rrparser will never fail
 
 | Each line starts with the a token containing the name of the RRTYPE,
 |   a colon, and the numeric RRTYPE. 
@@ -131,17 +131,24 @@ BUG the above assumes rrparser will never fail
 BUG: these I<n> need to take some parameters. but the MX example doesn't
      use them so I haven't implemented them yet
 
-> parseTokenI1 = do
->   -- take paramers here BUG
->   return I1
 
-> parseTokenI2 = do
->   -- take paramers here BUG
->   return I2
+> parseTokenI1 = parseTokenI (I1)
+> parseTokenI2 = parseTokenI (I2)
+> parseTokenI4 = parseTokenI (I4)
 
-> parseTokenI4 = do
->   -- take paramers here BUG
->   return I4
+> parseTokenI constr = do
+>   r <- optionMaybe $ do
+>     oneOf "["
+>     let pair = do
+>          sym <- many1 (noneOf ",=|<>\\")
+>          oneOf "="
+>          value <- many1 digit
+>          return (sym, (read value) :: Integer )
+>     l <- pair `sepBy` oneOf ","
+>     oneOf "]"
+>     return l
+>   return $ constr r
+
 
 > parseTokenN = do
 >   -- take paramers here BUG
@@ -166,7 +173,12 @@ BUG: these I<n> need to take some parameters. but the MX example doesn't
 >   rrtokens :: [RRToken]
 >   } deriving Show
 
-> data RRToken = A | I1 | I2 | I4 | N deriving Show
+> data RRToken = A
+>              | I1 (Maybe [(String, Integer)])
+>              | I2 (Maybe [(String, Integer)])
+>              | I4 (Maybe [(String, Integer)])
+>              | N
+>              deriving Show
 
 
 
@@ -199,22 +211,22 @@ those to create an octet stream.
 >    parser = parserForRFC3597 rrtype
 >  in parse parser "master file syntax line" string
 
-> parserForRFC3597 :: RRType -> Parser [Int]
+> parserForRFC3597 :: RRType -> Parser [Integer]
 > parserForRFC3597 rrtype = do
 >   string (rrname rrtype)
 >   spaces
 >   s <- mapM (parserForToken) (rrtokens rrtype)
 >   return (foldr1 (++) s)
 
-> parserForToken I1 = parserForI_n 1
-> parserForToken I2 = parserForI_n 2
-> parserForToken I4 = parserForI_n 4
+> parserForToken (I1 params) = parserForI_n 1 params
+> parserForToken (I2 params) = parserForI_n 2 params
+> parserForToken (I4 params) = parserForI_n 4 params
 
 > parserForToken N = do
 >   labels <- (many1 alphaNum) `sepEndBy` (oneOf ".")
 >   -- o is [String]
->   let labelToOcts s = [length s] ++ (map ord s) :: [Int]
->   let labelocts = (map labelToOcts labels) ++ [[0]] :: [[Int]]
+>   let labelToOcts s = map fromIntegral ([length s] ++ (map ord s)) :: [Integer]
+>   let labelocts = (map labelToOcts labels) ++ [[0]] :: [[Integer]]
 >   spaces
 >   return $ foldr1 (++) labelocts
 
@@ -230,17 +242,36 @@ the zone to do this properly?
 >   c <- many1 alphaNum
 >   oneOf "."
 >   d <- many1 alphaNum
->   return ([read a, read b, read c, read d] :: [Int])
+>   return ([read a, read b, read c, read d] :: [Integer])
 
 BUG: are there other ways to write IP addresses?
 
+When parsing an I, we might be given an integer, or we might be given
+a token.
 
-> parserForI_n octs = do
+QUESTION: It looks like using symbolic form excludes the use of numbers in
+a field. Is that the case? or are mixed symbolic and numeric forms allowed?
+
+> parserForI_n octs params = (maybe parserForI_nAsDigits parserForI_nAsSymbols params) octs
+
+> parserForI_nAsDigits octs = do
 >   n <- many1 digit
 >   spaces
->   let unpadded = toBase 256 ( read n :: Int)
+>   let unpadded = toBase 256 ( read n :: Integer)
 >   let padding = take ((octs - length unpadded) `max` 0) (repeat 0)
 >   return $ padding ++ unpadded
+
+> parserForI_nAsSymbols params octs = do
+>   let parserForSymbol (s,n) = try $ do
+>        string s
+>        spaces
+>        return n
+>   let parsers = map parserForSymbol params
+>   n <- choice parsers
+>   let unpadded = toBase 256 n
+>   let padding = take ((octs - length unpadded) `max` 0) (repeat 0)
+>   return $ padding ++ unpadded
+
 
 
 ==== Now we can process the example master file
